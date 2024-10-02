@@ -1,36 +1,3 @@
-import {
-  sampleRUM,
-  buildBlock,
-  loadHeader,
-  loadFooter,
-  decorateButtons,
-  decorateIcons,
-  decorateSections,
-  decorateBlocks,
-  decorateTemplateAndTheme,
-  waitForLCP,
-  loadBlocks,
-  loadCSS,
-  getMetadata,
-  loadScript,
-  toCamelCase,
-  toClassName,
-} from './aem.js';
-
-// Define an execution context
-const pluginContext = {
-  getAllMetadata,
-  getMetadata,
-  loadCSS,
-  loadScript,
-  sampleRUM,
-  toCamelCase,
-  toClassName,
-};
-
-const LCP_BLOCKS = []; // add your LCP blocks to the list
-
-//for experimentation
 const AUDIENCES = {
   mobile: () => window.innerWidth < 600,
   desktop: () => window.innerWidth >= 600,
@@ -52,33 +19,43 @@ export function getAllMetadata(scope) {
       return res;
     }, {});
 }
+// Define an execution context
+const pluginContext = {
+  getAllMetadata,
+  getMetadata,
+  loadCSS,
+  loadScript,
+  sampleRUM,
+  toCamelCase,
+  toClassName,
+};
+import {
+  sampleRUM,
+  buildBlock,
+  loadHeader,
+  loadFooter,
+  decorateButtons,
+  decorateSections,
+  decorateBlocks,
+  decorateTemplateAndTheme,
+  waitForLCP,
+  loadBlocks,
+  loadCSS,
+} from './lib-franklin.js';
 
+const LCP_BLOCKS = []; // add your LCP blocks to the list
+window.hlx.RUM_GENERATION = 'project-1'; // add your RUM generation information here
+const ICON_ROOT = '/icons';
+const ICON_EXCEPTIONS = ['login', 'cart', 'wishlist'];
 
-
-/**
- * Builds hero block and prepends to main in a new section.
- * @param {Element} main The container element
- */
 function buildHeroBlock(main) {
   const h1 = main.querySelector('h1');
   const picture = main.querySelector('picture');
   // eslint-disable-next-line no-bitwise
   if (h1 && picture && (h1.compareDocumentPosition(picture) & Node.DOCUMENT_POSITION_PRECEDING)) {
     const section = document.createElement('div');
-    section.append(buildBlock('hero', { elems: [picture, h1] }));
+    // section.append(buildBlock('hero', { elems: [picture, h1] }));
     main.prepend(section);
-  }
-}
-
-/**
- * load fonts.css and set a session storage flag
- */
-async function loadFonts() {
-  await loadCSS(`${window.hlx.codeBasePath}/styles/fonts.css`);
-  try {
-    if (!window.location.hostname.includes('localhost')) sessionStorage.setItem('fonts-loaded', 'true');
-  } catch (e) {
-    // do nothing
   }
 }
 
@@ -86,14 +63,14 @@ async function loadFonts() {
  * Builds all synthetic blocks in a container element.
  * @param {Element} main The container element
  */
-function buildAutoBlocks(main) {
-  try {
-    buildHeroBlock(main);
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Auto Blocking failed', error);
-  }
-}
+// function buildAutoBlocks(main) {
+//   try {
+//     buildHeroBlock(main);
+//   } catch (error) {
+//     // eslint-disable-next-line no-console
+//     console.error('Auto Blocking failed', error);
+//   }
+// }
 
 /**
  * Decorates the main element.
@@ -103,49 +80,52 @@ function buildAutoBlocks(main) {
 export function decorateMain(main) {
   // hopefully forward compatible button decoration
   decorateButtons(main);
-  decorateIcons(main);
-  buildAutoBlocks(main);
+  // buildAutoBlocks(main);
   decorateSections(main);
   decorateBlocks(main);
 }
 
 /**
- * Loads everything needed to get to LCP.
- * @param {Element} doc The container element
+ * loads everything needed to get to LCP.
  */
-async function loadEager(doc) {
+async function loadEager(doc) 
+{
   document.documentElement.lang = 'en';
   decorateTemplateAndTheme();
-
-  // for Experimentation
-  if (getMetadata('experiment')
-    || Object.keys(getAllMetadata('campaign')).length
-    || Object.keys(getAllMetadata('audience')).length) {
-    // eslint-disable-next-line import/no-relative-packages
-    const { loadEager: runEager } = await import('../plugins/experimentation/src/index.js');
-    await runEager(document, { audiences: AUDIENCES }, pluginContext);
-  }
-
   const main = doc.querySelector('main');
   if (main) {
     decorateMain(main);
-    document.body.classList.add('appear');
     await waitForLCP(LCP_BLOCKS);
   }
+// Add below snippet early in the eager phase
+if (getMetadata('experiment')
+  || Object.keys(getAllMetadata('campaign')).length
+  || Object.keys(getAllMetadata('audience')).length) {
+  // eslint-disable-next-line import/no-relative-packages
+  const { loadEager: runEager } = await import('../plugins/experimentation/src/index.js');
+  await runEager(document, { audiences: AUDIENCES }, pluginContext);
+}
+}
 
-  try {
-    /* if desktop (proxy for fast connection) or fonts already loaded, load fonts.css */
-    if (window.innerWidth >= 900 || sessionStorage.getItem('fonts-loaded')) {
-      loadFonts();
-    }
-  } catch (e) {
-    // do nothing
+/**
+ * Adds the favicon.
+ * @param {string} href The favicon URL
+ */
+export function addFavIcon(href) {
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.type = 'image/svg+xml';
+  link.href = href;
+  const existingLink = document.querySelector('head link[rel="icon"]');
+  if (existingLink) {
+    existingLink.parentElement.replaceChild(link, existingLink);
+  } else {
+    document.getElementsByTagName('head')[0].appendChild(link);
   }
 }
 
 /**
- * Loads everything that doesn't need to be delayed.
- * @param {Element} doc The container element
+ * loads everything that doesn't need to be delayed.
  */
 async function loadLazy(doc) {
   const main = doc.querySelector('main');
@@ -159,29 +139,23 @@ async function loadLazy(doc) {
   loadFooter(doc.querySelector('footer'));
 
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
-  loadFonts();
-
+  addFavIcon(`${window.hlx.codeBasePath}/icons/favicon.ico`);
   sampleRUM('lazy');
   sampleRUM.observe(main.querySelectorAll('div[data-block-name]'));
   sampleRUM.observe(main.querySelectorAll('picture > img'));
-
-   // for Experimentation
-   if ((getMetadata('experiment')
-   || Object.keys(getAllMetadata('campaign')).length
-   || Object.keys(getAllMetadata('audience')).length)) {
-   // eslint-disable-next-line import/no-relative-packages
-   const { loadLazy: runLazy } = await import('../plugins/experimentation/src/index.js');
-   await runLazy(document, { audiences: AUDIENCES }, pluginContext);
- }
+// Add below snippet at the end of the lazy phase
+if ((getMetadata('experiment')
+  || Object.keys(getAllMetadata('campaign')).length
+  || Object.keys(getAllMetadata('audience')).length)) {
+  // eslint-disable-next-line import/no-relative-packages
+  const { loadLazy: runLazy } = await import('../plugins/experimentation/src/index.js');
+  await runLazy(document, { audiences: AUDIENCES }, pluginContext);
 }
-
-export function jsx(html, ...args) {
-  return html.slice(1).reduce((str, elem, i) => str + args[i] + elem, html[0]);
 }
 
 /**
- * Loads everything that happens a lot later,
- * without impacting the user experience.
+ * loads everything that happens a lot later, without impacting
+ * the user experience.
  */
 function loadDelayed() {
   // eslint-disable-next-line import/no-cycle
@@ -195,4 +169,158 @@ async function loadPage() {
   loadDelayed();
 }
 
+export function decorateIcons(element = document) {
+  element.querySelectorAll('span.icon').forEach(async (span) => {
+    if (span.classList.length < 2 || !span.classList[1].startsWith('icon-')) {
+      return;
+    }
+    const icon = span.classList[1].substring(5);
+    if (ICON_EXCEPTIONS.includes(icon)) return;
+
+    // eslint-disable-next-line no-use-before-define
+    const resp = await fetch(`${window.hlx.codeBasePath}${ICON_ROOT}/${icon}.svg`);
+    if (resp.ok) {
+      const iconHTML = await resp.text();
+      if (iconHTML.match(/<style/i)) {
+        const img = document.createElement('img');
+        img.src = `data:image/svg+xml,${encodeURIComponent(iconHTML)}`;
+        span.appendChild(img);
+      } else {
+        span.innerHTML = iconHTML;
+      }
+    }
+    else { }
+  });
+}
+
+/**
+ * Helper function to create DOM elements
+ * @param {string} tag DOM element to be created
+ * @param {Object} attributes attributes to be added
+ * @param {HTMLElement|SVGElement|string} html HTML or SVG to append to/after new element
+ */
+
+export function createTag(tag, attributes, html = undefined) {
+  const el = document.createElement(tag);
+  if (html) {
+    if (html instanceof HTMLElement || html instanceof SVGElement) {
+      el.append(html);
+    } else {
+      el.insertAdjacentHTML('beforeend', html);
+    }
+  }
+  if (attributes) {
+    Object.entries(attributes).forEach(([key, val]) => {
+      el.setAttribute(key, val);
+    });
+  }
+  return el;
+}
+
+export function makeVideo(element, href) {
+  element.innerHTML = `<video loop muted playsInline>
+    <source data-src="${href}" type="video/mp4" />
+  </video>`;
+
+  const video = element.querySelector('video');
+  const source = element.querySelector('video > source');
+
+  source.src = source.dataset.src;
+  
+  video.load();
+  video.addEventListener('loadeddata', () => {
+    video.setAttribute('autoplay', true);
+    video.setAttribute('data-loaded', true);
+    video.play();
+  });
+
+}
+
 loadPage();
+
+let pos = 0;
+let vWidth = 100;
+function reveals() {
+  const reveals = document.querySelectorAll(".rl-signature span > svg");
+  for (let i = 0; i < reveals.length; i++) {
+    let windowHeight = window.innerHeight;
+    let elementTop = reveals[i].getBoundingClientRect().top;
+    let elementVisible = 150;
+
+    if (elementTop < windowHeight - elementVisible) {
+      reveals[i].classList.add("active");
+    } else {
+      reveals[i].classList.remove("active");
+    }
+  }
+  const navWrapper = document.querySelector('.nav-wrapper');
+  const greenbar = document.querySelector(".cards.stick"); 
+  const imgHeight = document.querySelector('.cards.stick img');
+  
+  const gbTop = greenbar.getBoundingClientRect().top;
+  if(gbTop < (imgHeight.offsetHeight - navWrapper.offsetHeight) && pos === 0) {
+    greenbar.style.position = 'fixed'; 
+    greenbar.style.top = `${(navWrapper.offsetHeight - imgHeight.offsetHeight)}px`;
+    greenbar.style['z-index'] = '1'; 
+    pos = window.visualViewport.pageTop;
+  } else if(pos > window.visualViewport.pageTop) {
+    greenbar.style.position = 'relative';
+    greenbar.style.top = 'unset';
+    greenbar.style['z-index'] = 'unset';
+    pos = 0;
+  }
+
+  
+  let bgColor = 'transparent';
+  let fontColor = '#000';
+  let className = '';
+
+  if(window.scrollY === 0) {
+    bgColor = 'transparent';
+    fontColor = '#fff';
+  } else {
+    bgColor = '#fff';
+    fontColor = '#000';
+    className = 'black';
+  }
+
+  navWrapper.style.backgroundColor = bgColor;
+  const links = navWrapper.querySelectorAll('a');
+  links.forEach(link => {
+    link.style.color = fontColor;
+  });
+
+  let icons = navWrapper.querySelectorAll('span.icon');
+  icons.forEach((icon) => {
+    icon.style.fill = fontColor;
+  });
+
+  icons = navWrapper.querySelectorAll('span.icon');
+  icons.forEach((icon) => {
+    if(className == '')
+      icon.parentElement.classList.remove('black');
+    else
+      icon.parentElement.classList.add('black');
+  });
+
+  const reveal = document.querySelector('.reveal');
+  
+  const rect = reveal.getBoundingClientRect();
+  const elemTop = rect.top;
+  const elemBottom = rect.bottom;
+  const isVisible = (elemTop >= 0) && (elemBottom <= window.innerHeight);
+
+  const video = reveal.querySelector('video');
+   
+  if(isVisible) {
+    vWidth += 160;
+    video.style.left = '50%';
+    video.style.top = '50%';
+    video.style.transform = 'translate(-50%, -50%)';
+    video.style.width = `${vWidth}px`;
+    video.style.maxHeight = '100%';
+    video.style.maxWidth = '1920px';
+  }
+}
+
+window.addEventListener("scroll", reveals);
